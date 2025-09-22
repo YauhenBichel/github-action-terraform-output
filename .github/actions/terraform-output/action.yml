@@ -1,0 +1,48 @@
+name: 'Terraform Output'
+description: 'Terraform output using JSON'
+
+inputs:
+  working-dir:
+    description: 'Working directory for Terraform'
+    required: false
+    default: './terraform'
+
+outputs:
+  terraform-output:
+    description: 'Terraform output'
+    value: ${{ steps.output.outputs.terraform-output }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Terraform Output
+      id: terraform-output-action
+      shell: bash
+      run: |
+
+        if [ ! -f ".terraform/terraform.tfstate" ]; then
+          echo "Warning: Terraform doesn't appear to be initialized in this directory" >&2
+        fi
+
+        if output=$(terraform output -json); then
+          
+          if echo "$output" | jq empty 2>/dev/null; then
+            {
+              echo "terraform-output<<EOF"
+              echo "$output"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+            
+            echo "Terraform outputs:"
+            echo "$output" | jq .
+          else
+            echo "Error: Terraform output is not valid JSON" >&2
+            echo "Raw output: $output" >&2
+            exit 1
+          fi
+        else
+          echo "Error: terraform output command failed" >&2
+          echo "Output: $output" >&2
+          exit 1
+        fi
+      working-directory: ${{ inputs.working-dir }}

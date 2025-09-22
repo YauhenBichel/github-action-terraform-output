@@ -1,13 +1,3 @@
-# GitHub Actions workflow action for Terraform output
-
-## Author is Yauhen Bichel
-
-## Hot to use
-
-Please find `terraform.yml` workflow file with example of using terraform-output `action.yml` file
-
-```
-
 name: "Terraform"
 
 on:
@@ -64,6 +54,3 @@ jobs:
       uses: ./.github/actions/terraform-output
       with:
         working-dir: ${{ inputs.working_dir }}
-
-
-```
