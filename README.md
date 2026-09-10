@@ -1,14 +1,57 @@
-# GitHub Actions workflow action for Terraform output
+# Terraform Output as JSON
 
-## Author is Yauhen Bichel
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-## Hot to use
+Reads `terraform output -json` from a working directory and hands it back as a
+single step output, so a later step can pick values out of it with `jq` or
+`fromJSON`.
 
-Please find `terraform.yml` workflow file with example of using terraform-output `action.yml` file
+It validates the JSON before returning it, warns when the directory looks
+uninitialised, and writes the value with a heredoc delimiter so multi-line
+output survives intact.
 
+## Use it
+
+```yaml
+- name: Terraform Output
+  id: tf
+  uses: YauhenBichel/github-action-terraform-output@v1
+  with:
+    working-dir: ./terraform
+
+- name: Read one value
+  run: echo "The bucket is $BUCKET"
+  env:
+    BUCKET: ${{ fromJSON(steps.tf.outputs.terraform-output).bucket_name.value }}
 ```
 
-name: "Terraform"
+`terraform init` has to have run in `working-dir` first, in the same job.
+Terraform reads state to answer `output`, so this cannot run on its own.
+
+## Inputs
+
+| Name | Default | Description |
+|---|---|---|
+| `working-dir` | `./terraform` | Directory to run `terraform output` in |
+
+## Outputs
+
+| Name | Description |
+|---|---|
+| `terraform-output` | The full `terraform output -json` document, as a string |
+
+The value is whatever Terraform prints, so each output is an object with
+`value`, `type` and `sensitive`. That is why the example above reaches for
+`.bucket_name.value` rather than `.bucket_name`.
+
+Sensitive outputs are included. `terraform output -json` prints them in the
+clear, unlike the human-readable form, so treat the result as a secret if any
+of your outputs are one, and do not `echo` it.
+
+## A full job
+
+```yaml
+name: Terraform
 
 on:
   workflow_call:
@@ -27,56 +70,45 @@ on:
 
 permissions:
   contents: read
+  id-token: write   # for the OIDC role assumption below
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    environment: dev
     steps:
-    - name: Deploy to dev
-      run: |
-        echo "Deploying to dev environment"
+      - uses: actions/checkout@v4
 
-    - name: Checkout
-      uses: actions/checkout@v4
-    
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ inputs.aws-region }}
-    
-    - name: Display commit information
-      run: echo "$(git log -1)"
-    
-    - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: ${{ inputs.terraform_version }}
+      # OIDC rather than a stored access key: nothing long-lived to leak, and
+      # nothing to rotate.
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::111122223333:role/github-actions-terraform
+          aws-region: ${{ inputs.aws-region }}
 
-    - name: Terraform Init
-      run: terraform init -backend-config="environments/dev/backend.hcl" -input=false
-      working-directory: ${{ inputs.working_dir }}
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform_version }}
 
-    - name: Terraform Output
-      id: terraform-output
-      uses: ./.github/actions/terraform-output
-      with:
-        working-dir: ${{ inputs.working_dir }}
+      - name: Terraform Init
+        run: terraform init -input=false
+        working-directory: ${{ inputs.working_dir }}
 
-
+      - name: Terraform Output
+        id: tf
+        uses: YauhenBichel/github-action-terraform-output@v1
+        with:
+          working-dir: ${{ inputs.working_dir }}
 ```
 
+## Contributing
+
+Issues and pull requests are welcome.
+
+## Licence
+
+[Apache-2.0](LICENSE) — Yauhen Bichel
+
 ---
-
-## Contributors
-
-Thank you to everyone who has helped this project. Your code, reviews, issues, and pull requests are appreciated.
-
-- [@YauhenBichel](https://github.com/YauhenBichel)
-
-See the [full contributor graph](https://github.com/YauhenBichel/github-action-terraform-output/graphs/contributors).
 
 ## Contributors
 

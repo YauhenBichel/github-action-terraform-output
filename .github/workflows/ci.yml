@@ -1,0 +1,71 @@
+name: CI
+
+# The action shipped for months returning an empty string, because its declared
+# output named a step id that did not exist. Nothing failed, so nothing noticed.
+#
+# The smoke job below is the answer to that: it builds a throwaway Terraform
+# configuration with a known output, runs this action against it, and fails if
+# what comes back is not that value. No cloud provider and no credentials are
+# involved, so it costs a few seconds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: action.yml is consumable
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: python3 scripts/check_action.py
+
+  smoke:
+    name: the action returns real output
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: A configuration with one known output
+        run: |
+          mkdir -p smoke
+          cat > smoke/main.tf <<'TF'
+          output "bucket_name" {
+            value = "smoke-test-bucket"
+          }
+          TF
+          terraform -chdir=smoke init -input=false
+          # Outputs are only readable from state, and state only exists after
+          # an apply. There are no resources here, so this needs no provider
+          # and no credentials.
+          terraform -chdir=smoke apply -auto-approve -input=false
+
+      - name: Run the action
+        id: tf
+        uses: ./
+        with:
+          working-dir: ./smoke
+
+      - name: The output is the value we put in
+        env:
+          RESULT: ${{ steps.tf.outputs.terraform-output }}
+        run: |
+          if [ -z "$RESULT" ]; then
+            echo "::error::The action returned an empty string. This is the bug the output-id fix was for."
+            exit 1
+          fi
+          echo "$RESULT" | jq -e '.bucket_name.value == "smoke-test-bucket"' > /dev/null
+          echo "Got back: $(echo "$RESULT" | jq -c .)"
