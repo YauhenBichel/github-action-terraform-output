@@ -1,4 +1,4 @@
-name: 'Terraform Output'
+name: 'Terraform Output as JSON'
 description: 'Terraform output using JSON'
 
 inputs:
@@ -10,7 +10,7 @@ inputs:
 outputs:
   terraform-output:
     description: 'Terraform output'
-    value: ${{ steps.output.outputs.terraform-output }}
+    value: ${{ steps.terraform-output-action.outputs.terraform-output }}
 
 runs:
   using: 'composite'
