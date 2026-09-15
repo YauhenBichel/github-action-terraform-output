@@ -1,4 +1,4 @@
-name: 'Terraform Output'
+name: 'Terraform Output as JSON'
 description: 'Terraform output using JSON'
 
 inputs:
@@ -10,7 +10,7 @@ inputs:
 outputs:
   terraform-output:
     description: 'Terraform output'
-    value: ${{ steps.output.outputs.terraform-output }}
+    value: ${{ steps.terraform-output-action.outputs.terraform-output }}
 
 runs:
   using: 'composite'
@@ -33,16 +33,15 @@ runs:
               echo "EOF"
             } >> $GITHUB_OUTPUT
             
-            echo "Terraform outputs:"
-            echo "$output" | jq .
+            # Print only the output names: values can be sensitive.
+            echo "Terraform output names:"
+            echo "$output" | jq -r 'keys[]'
           else
-            echo "Error: Terraform output is not valid JSON" >&2
-            echo "Raw output: $output" >&2
+            echo "Error: Terraform output is not valid JSON (not printed: it may contain sensitive values)" >&2
             exit 1
           fi
         else
           echo "Error: terraform output command failed" >&2
-          echo "Output: $output" >&2
           exit 1
         fi
       working-directory: ${{ inputs.working-dir }}

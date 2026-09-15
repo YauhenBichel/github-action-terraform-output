@@ -51,6 +51,6 @@ jobs:
 
     - name: Terraform Output
       id: terraform-output
-      uses: ./.github/actions/terraform-output
+      uses: ./
       with:
         working-dir: ${{ inputs.working_dir }}
